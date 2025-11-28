@@ -40,9 +40,9 @@ int main(void) {
         return -1;
     }
 
-    char* vertexShaderSource = read_file("shader.vert");
+    const char* vertexShaderSource = read_file("shader.vert");
     unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, (char const* const*) &vertexShaderSource, NULL);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
     // check for shader compile errors
     int success;
@@ -53,10 +53,10 @@ int main(void) {
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
         printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
     }
-    char *fragmentShaderSource = read_file("shader.frag");
+    const char *fragmentShaderSource = read_file("shader.frag");
     // fragment shader
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1,(char const* const*)  &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     // check for shader compile errors
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
