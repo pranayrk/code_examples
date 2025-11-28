@@ -1,62 +1,147 @@
+#include "file.h"
+
+#define RGFW_OPENGL
+// #define RGFW_USE_XDL // feel free to remove this line if you don't want to use XDL (-lX11 -lXrandr -lGLX will be required)
+#define RGFW_ALLOC_DROPFILES
 #define RGFW_IMPLEMENTATION
-#define RGFW_OPENGL /* if this line is not added, OpenGL functions will not be included */
-#include "RGFW.h"
+#define RGFW_PRINT_ERRORS
+#define RGFW_DEBUG
+#define GL_SILENCE_DEPRECATION
+#include <RGFW.h>
 
-#include <stdio.h>
+#define RGL_LOAD_IMPLEMENTATION
+#include "rglLoad.h"
 
-#ifdef RGFW_MACOS
-#include <OpenGL/gl.h> /* why does macOS do this */
-#else
-#include <GL/gl.h>
-#endif
+#include <stdbool.h>
 
-void keyfunc(RGFW_window* win, RGFW_key key, u8 keyChar, RGFW_keymod keyMod, RGFW_bool repeat, RGFW_bool pressed) {
-    RGFW_UNUSED(repeat);
-    if (key == RGFW_escape && pressed) {
-        RGFW_window_setShouldClose(win, 1);
+// settings
+const int SCR_WIDTH = 800;
+const int SCR_HEIGHT = 600;
+
+
+RGFW_window* setupRGFW() {
+    RGFW_glHints* hints = RGFW_getGlobalHints_OpenGL();
+    hints->major = 3;
+    hints->minor = 3;
+    RGFW_setGlobalHints_OpenGL(hints);
+	RGFW_window* window = RGFW_createWindow("LearnOpenGL", SCR_WIDTH, SCR_HEIGHT, SCR_WIDTH, SCR_HEIGHT, RGFW_windowAllowDND | RGFW_windowCenter | RGFW_windowScaleToMonitor | RGFW_windowOpenGL);
+    if (window == NULL)
+    {
+        printf("Failed to create RGFW window\n");
+        exit(0);
     }
+    RGFW_window_setExitKey(window, RGFW_escape);
+    RGFW_window_makeCurrentContext_OpenGL(window);
+
+    if (RGL_loadGL3((RGLloadfunc)RGFW_getProcAddress_OpenGL)) {
+        printf("Failed to initialize GLAD\n");
+        exit(0);
+    }
+    return window;
 }
 
-int main() {
-    /* the RGFW_windowOpenGL flag tells it to create an OpenGL context, but you can also create your own with RGFW_window_createContext_OpenGL */
-    RGFW_window* win = RGFW_createWindow("a window", 0, 0, 800, 600, RGFW_windowCenter | RGFW_windowNoResize | RGFW_windowOpenGL);
+GLuint setupProgram() {
+    const char* vertexShaderSource = read_file("shader.vert");
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
 
-    RGFW_setKeyCallback(keyfunc); // you can use callbacks like this if you want
+    int success;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
+        return -1;
+    }
+    const char *fragmentShaderSource = read_file("shader.frag");
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
 
-    while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        printf("ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n%s\n", infoLog);
+        return -1;
+    }
+
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        printf("ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+        return -1;
+    }
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    return shaderProgram;
+}
+
+int main(void) {
+    RGFW_window* window = setupRGFW();
+    GLuint shaderProgram = setupProgram();
+
+    
+    float vertices[] = {
+         0.5f,  0.5f, 0.0f,  // top right
+         0.5f, -0.5f, 0.0f,  // bottom right
+        -0.5f, -0.5f, 0.0f,  // bottom left
+        -0.5f,  0.5f, 0.0f   // top left
+    };
+    GLuint indices[] = {  // note that we start from 0!
+        0, 1, 3,  // first Triangle
+        1, 2, 3   // second Triangle
+    };
+    GLuint VBO, vertex_array, EBO;
+    glGenVertexArrays(1, &vertex_array);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+    glBindVertexArray(vertex_array);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindVertexArray(0);
+
+
+    while (RGFW_window_shouldClose(window) == RGFW_FALSE) {
         RGFW_event event;
-        while (RGFW_window_checkEvent(win, &event)) {  // or RGFW_pollEvents(); if you only want callbacks
-            // you can either check the current event yourself
-            if (event.type == RGFW_quit) break;
 
-            i32 mouseX, mouseY;
-            RGFW_window_getMouse(win, &mouseX, &mouseY);
-
-            if (event.type == RGFW_mouseButtonPressed && event.button.value == RGFW_mouseLeft) {
-                printf("You clicked at x: %d, y: %d\n", mouseX, mouseY);
-            }
-
-            // or use the existing functions
-            if (RGFW_isMousePressed(RGFW_mouseRight)) {
-                printf("The right mouse button was clicked at x: %d, y: %d\n", mouseX, mouseY);
+        while (RGFW_window_checkEvent(window, &event)) {
+            if (event.type == RGFW_quit) {
+                break;
             }
         }
 
-        // OpenGL 1.1 is used here for a simple example, but you can use any version you want (if you request it first (see gl33/gl33.c))
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-        glBegin(GL_TRIANGLES);
-            glColor3f(1.0f, 0.0f, 0.0f); glVertex2f(-0.6f, -0.75f);
-            glColor3f(0.0f, 1.0f, 0.0f); glVertex2f(0.6f, -0.75f);
-            glColor3f(0.0f, 0.0f, 1.0f); glVertex2f(0.0f, 0.75f);
-        glEnd();
-
-        RGFW_window_swapBuffers_OpenGL(win);
-        glFlush();
+        glUseProgram(shaderProgram);
+        glBindVertexArray(vertex_array);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        RGFW_window_swapBuffers_OpenGL(window);
     }
 
-    RGFW_window_close(win);
-    return 0;
+    glDeleteVertexArrays(1, &vertex_array);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+    glDeleteProgram(shaderProgram);
 
-    :
+    RGFW_window_close(window);
+    return 0;
+}
