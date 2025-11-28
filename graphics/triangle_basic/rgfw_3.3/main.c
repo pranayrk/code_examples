@@ -1,3 +1,4 @@
+#include "file.h"
 #define RGFW_OPENGL
 // #define RGFW_USE_XDL // feel free to remove this line if you don't want to use XDL (-lX11 -lXrandr -lGLX will be required)
 #define RGFW_ALLOC_DROPFILES
@@ -7,12 +8,8 @@
 #define GL_SILENCE_DEPRECATION
 #include <RGFW.h>
 
-#ifndef __EMSCRIPTEN__
 #define RGL_LOAD_IMPLEMENTATION
 #include "rglLoad.h"
-#else
-#include <GLES3/gl3.h>
-#endif
 
 #define MULTILINE_STR(...) #__VA_ARGS__
 
@@ -22,42 +19,8 @@
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-#ifndef __EMSCRIPTEN__
-const char *vertexShaderSource = MULTILINE_STR(
-
-\x23version 330 core\n
-layout (location = 0) in vec3 aPos;
-void main()
-{
-    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-}
-);
-
-const char *fragmentShaderSource = MULTILINE_STR(
-\x23version 330 core\n
-out vec4 FragColor;
-void main()
-{
-    FragColor = vec4(0.0f, 0.5f, 0.2f, 1.0f);
-}
-);
-#else
-   const char *vertexShaderSource = MULTILINE_STR(
-      attribute vec3 aPos;
-      void main() {
-         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-      }
-   );
-
-  const char *fragmentShaderSource = MULTILINE_STR(
-      void main() {
-        gl_FragColor = vec4(0.5, 0.5, 0.2, 1.0);
-      }
-    );
-#endif
-
-
 int main(void) {
+
     RGFW_glHints* hints = RGFW_getGlobalHints_OpenGL();
     hints->major = 3;
     hints->minor = 3;
@@ -72,15 +35,14 @@ int main(void) {
     RGFW_window_setExitKey(window, RGFW_escape);
     RGFW_window_makeCurrentContext_OpenGL(window);
 
-    #ifndef RGFW_WASM
     if (RGL_loadGL3((RGLloadfunc)RGFW_getProcAddress_OpenGL)) {
         printf("Failed to initialize GLAD\n");
         return -1;
     }
-    #endif
 
+    char* vertexShaderSource = read_file("shader.vert");
     unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glShaderSource(vertexShader, 1, (char const* const*) &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
     // check for shader compile errors
     int success;
@@ -91,9 +53,10 @@ int main(void) {
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
         printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
     }
+    char *fragmentShaderSource = read_file("shader.frag");
     // fragment shader
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1,(char const* const*)  &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     // check for shader compile errors
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
