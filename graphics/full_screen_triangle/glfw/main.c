@@ -11,9 +11,9 @@
 #include <stdio.h>
  
 float vertices[] = {
-    -0.5f, -0.5f, 0.0f,
-    0.5f, -0.5f, 0.0f,
-    0.0f, 0.5f, 0.0f
+     -1.0f, -1.0f, 0.0f,
+     3.0f, -1.0f, 0.0f,
+     -1.0f,  3.0f, 0.0f,
 };
  
 static void error_callback(int error, const char* description)
@@ -27,16 +27,16 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
  
-static void checkSuccess(GLuint shader) {
+static void checkSuccess(GLuint shader, GLuint infoType) {
     int success;
     char infoLog[512];
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    glGetShaderiv(shader, infoType, &success);
     
     if(!success) {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        printf("Error Compiling Shader\n");
+        printf("Error:\n");
         printf(infoLog);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -72,50 +72,65 @@ const GLuint setupProgram() {
     const GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &vertex_shader_text, NULL);
     glCompileShader(vertex_shader);
-    checkSuccess(vertex_shader);
+    checkSuccess(vertex_shader, GL_COMPILE_STATUS);
 
     const char* fragment_shader_text = read_file("shader.frag");
     const GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment_shader, 1, &fragment_shader_text, NULL);
     glCompileShader(fragment_shader);
-    checkSuccess(fragment_shader);
+    checkSuccess(fragment_shader, GL_COMPILE_STATUS);
  
     const GLuint program = glCreateProgram();
     glAttachShader(program, vertex_shader);
     glAttachShader(program, fragment_shader);
     glLinkProgram(program);
+
+    checkSuccess(program, GL_LINK_STATUS);
+
     return program;
 }
 
+
+GLuint setupVAO() {
+    GLuint VBO;
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    unsigned int VAO;
+    glGenVertexArrays(1, &VAO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    return VAO;
+}
 
 
 int main(void)
 {
     GLFWwindow* window = setupGLFW();
     GLuint program = setupProgram();
+    GLuint VAO = setupVAO();
  
-
-    GLuint VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), GL_STATIC_DRAW);
 
     while (!glfwWindowShouldClose(window))
     {
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
-        const float ratio = width / (float) height;
- 
-        glViewport(0, 0, width, height);
+        glViewport(0,0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
- 
- 
         glUseProgram(program);
+        glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
- 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
  
     glfwDestroyWindow(window);
  
