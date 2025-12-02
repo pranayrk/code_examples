@@ -1,7 +1,8 @@
 #include "file.h"
+#include "linmath.h"
 
 #define RGFW_OPENGL
-// #define RGFW_USE_XDL // feel free to remove this line if you don't want to use XDL (-lX11 -lXrandr -lGLX will be required)
+#define RGFW_USE_XDL // feel free to remove this line if you don't want to use XDL (-lX11 -lXrandr -lGLX will be required)
 #define RGFW_ALLOC_DROPFILES
 #define RGFW_IMPLEMENTATION
 #define RGFW_PRINT_ERRORS
@@ -13,6 +14,18 @@
 #include "rglLoad.h"
 
 #include <stdbool.h>
+
+typedef struct Vertex {
+    vec2 pos;
+    vec3 col;
+} Vertex;
+
+static const Vertex vertices[3] = {
+    { { -0.6f, -0.4f }, { 1.f, 0.f, 0.f } },
+    { {  0.6f, -0.4f }, { 0.f, 1.f, 0.f } },
+    { {   0.f,  0.6f }, { 0.f, 0.f, 1.f } }
+};
+
 
 // settings
 const int SCR_WIDTH = 800;
@@ -68,56 +81,40 @@ GLuint setupProgram() {
         return -1;
     }
 
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
 
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
         printf("ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
         return -1;
     }
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
-    return shaderProgram;
+    return program;
 }
 
 int main(void) {
     RGFW_window* window = setupRGFW();
-    GLuint shaderProgram = setupProgram();
+    GLuint program = setupProgram();
 
     
-    float vertices[] = {
-         0.5f,  0.5f, 0.0f,  // top right
-         0.5f, -0.5f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f   // top left
-    };
-    GLuint indices[] = {  // note that we start from 0!
-        0, 1, 3,  // first Triangle
-        1, 2, 3   // second Triangle
-    };
-    GLuint VBO, vertex_array, EBO;
+    const GLint mvp_location = glGetUniformLocation(program, "MVP");
+    const GLint vpos_location = glGetUniformLocation(program, "vPos");
+    const GLint vcol_location = glGetUniformLocation(program, "vCol");
+
+    GLuint vertex_array;
     glGenVertexArrays(1, &vertex_array);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
     glBindVertexArray(vertex_array);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glBindVertexArray(0);
-
+    glEnableVertexAttribArray(vpos_location);
+    glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE,
+                          sizeof(Vertex), (void*) offsetof(Vertex, pos));
+    glEnableVertexAttribArray(vcol_location);
+    glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE,
+                          sizeof(Vertex), (void*) offsetof(Vertex, col));
 
     while (RGFW_window_shouldClose(window) == RGFW_FALSE) {
         RGFW_event event;
@@ -128,19 +125,31 @@ int main(void) {
             }
         }
 
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        int width, height;
+        RGFW_window_getSize(window, &width, &height);
+        const float ratio = width / (float) height;
+
+        glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(shaderProgram);
+        mat4x4 m, p, mvp;
+        mat4x4_identity(m);
+//        mat4x4_rotate_Z(m, m, (float) glXGetTime());
+        mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
+        mat4x4_mul(mvp, p, m);
+
+        glUseProgram(program);
+        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*) &mvp);
         glBindVertexArray(vertex_array);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+
         RGFW_window_swapBuffers_OpenGL(window);
+        RGFW_pollEvents();
     }
 
     glDeleteVertexArrays(1, &vertex_array);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    glDeleteProgram(shaderProgram);
+    glDeleteProgram(program);
 
     RGFW_window_close(window);
     return 0;
