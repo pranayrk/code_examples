@@ -123,9 +123,24 @@ int main(void)
     GLuint VAO = setupVAO();
 
 
-    float deltaTime = 0.0f;
+    float previousFrameTime = 0.0f;
+    float frameTimes[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    int frameCounter = 0;
+    float averageFrameTime;
+
+    float averageFPS = 0.0f;
+    
     while (!glfwWindowShouldClose(window))
     {
+        float currentFrameTime = glfwGetTime();
+        frameCounter = (frameCounter + 1) % 5;
+        frameTimes[frameCounter] = currentFrameTime - previousFrameTime;
+        previousFrameTime = currentFrameTime;
+
+        averageFrameTime = (frameTimes[0] + frameTimes[1]+frameTimes[2] + frameTimes[3] + frameTimes[4])/5;
+
+        averageFPS = (averageFPS + 1/averageFrameTime) /2;
+
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0,0, width, height);
@@ -135,9 +150,7 @@ int main(void)
         glUniform2fv(glGetUniformLocation(program, "iResolution"), 1, &screen[0]);
 
 
-        double currentFrame = glfwGetTime();
-        printf("%d\n", currentFrame);
-        glUniform1f(glGetUniformLocation(program, "iTime"), (int) currentFrame);
+        glUniform1f(glGetUniformLocation(program, "iTime"), (float) currentFrameTime);
 
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -152,6 +165,7 @@ int main(void)
 
     glfwDestroyWindow(window);
 
+    printf("FPS: %0.2f\n", averageFPS);
     glfwTerminate();
     exit(EXIT_SUCCESS);
 }
